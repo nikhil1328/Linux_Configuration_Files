@@ -1,0 +1,95 @@
+UBUNTU_MIRRORING (REPOSITORY_Creation_to_install_Packages_in_Ubuntu)
+
+We can setup a local repository of Ubuntu in our local PC or server using many tools, but we'll featuring about APT-Mirror. Here, 
+we'll be mirroring packages from the default mirror to our Local Server or PC and we'll need at least 120 GB or more free space in 
+our local or external hard drive. It can be configured through a HTTP or FTP server to share its software packages with local system 
+clients.
+We'll need to install Apache Web Server and APT-Mirror to get our stuffs working out of the box. Here are the steps below to 
+configure a working local repository:
+
+
+1.	Installing Required Packages.
+We'll first install a web server to host our local repository. And then we'll need to install apt-mirror. 
+$ sudo apt-get install apache2
+$ sudo apt-get install apt-mirror
+
+
+2.	Configuring APT-Mirror.
+Now create a directory to save all packages. For example, let us create a directory called  “/packages”. We are going to save all 
+
+packages in this directory:
+$ sudo mkdir /packages
+
+Now, open the file /etc/apt/mirror.list file
+$ sudo nano /etc/apt/mirror.list
+
+Copy the below lines of configuration to mirror.list and edit as per requirements.
+
+############# config ##################
+set base_path    /packages
+# set mirror_path  $base_path/mirror
+# set skel_path    $base_path/skel
+# set var_path     $base_path/var
+# set cleanscript $var_path/clean.sh
+# set defaultarch  <running host architecture>
+# set postmirror_script $var_path/postmirror.sh
+# set run_postmirror 0
+set nthreads     20
+set _tilde 0
+#
+############# end config ##############
+
+deb http://archive.ubuntu.com/ubuntu trusty main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu trusty-security main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu trusty-updates main restricted universe multiverse
+#deb http://archive.ubuntu.com/ubuntu trusty-proposed main restricted universe multiverse
+#deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse
+deb-src http://archive.ubuntu.com/ubuntu trusty main restricted universe multiverse
+deb-src http://archive.ubuntu.com/ubuntu trusty-security main restricted universe multiverse
+deb-src http://archive.ubuntu.com/ubuntu trusty-updates main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu trusty-proposed main restricted universe multiverse
+#deb-src http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse
+clean http://archive.ubuntu.com/ubuntu
+
+
+Note:  If you use both 32bit and 64bit architectures, you should name them separately in the above file. For example, if you use 
+32bit architecture, the lines should start with deb-i386and for 64bit, the lines should start as deb-amd64.
+Now, we'll have to run apt-mirror which will now get/mirror all the packages in the repository.
+
+$sudo apt-mirror
+
+It will take time to download all the packages from the Ubuntu Server which depends upon the connection speed and performance with 
+respect to you and the mirror server.
+
+
+3.	Configuring Web Server.
+To be able to access the repo from other computers you need a webserver. So, we will now configure Apache Server:
+We will create a symlink from our local repo's directory to a directory ubuntu in the hosting directory of Apache ie 
+
+“/var/www/ubuntu” .
+
+$ sudo ln -s /packages /var/www/ubuntu
+$ sudo service apache2 start
+
+The above command will allow us to browse our Mirrored Repo from our localhost ie http://127.0.0.1 by default.
+
+
+4. 	Configuring Client Side to access packages form ubuntu mirror.
+Finally, we need to add repository source in other computers which will fetch the packages and repository from our computer. To do 
+that, we'll need to edit "/etc/apt/sources.list" and add the following lines.
+
+$ sudo nano /etc/apt/sources.list
+Add this line in /etc/apt/sources.list and save.
+
+deb http://(ip add of server)/ubuntu/ trusty main restricted universe
+OR
+deb http:// (ip add of server)/ubuntu trusty universe
+deb http:// (ip add of server)/ubuntu trusty main restricted
+deb http:// (ip add of server)/ubuntu trusty-updates main restricted
+
+
+$ sudo apt-get update
+
+Finally, we are done. Now you can install the required packages using sudo apt-get install packagename from your local Ubuntu 
+repository with high speed and with low bandwidth.
+
