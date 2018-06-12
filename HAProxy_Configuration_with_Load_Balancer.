@@ -1,0 +1,154 @@
+HAProxy Configuration with Load Balancer.
+
+HAProxy:: HAProxy, which stands for High Availability Proxy, is a popular open source software TCP/HTTP Load Balancer and proxying 
+solution which can be run on Linux, Solaris, and FreeBSD. Its most common use is to improve the performance and reliability of a 
+server environment by distributing the workload across multiple servers (e.g. web, application, database). It is used in many high-
+profile environments, including: GitHub, Imgur, Instagram, and Twitter.
+
+
+Required Packages: 
+1: haproxy
+2: keepalived
+
+
+Setup:
+HAProxy server1 : 10.10.0.10
+HAProxy server2 : 10.10.0.20
+Virtual IP	    : 10.10.0.30
+Node1-Appserver	: 10.10.0.11
+Node2-Appserver : 10.10.0.12
+
+
+Explanation:  
+We will be configuring two HAProxy servers (HAProxy server-1 and HAProxy Server-2. Load balancing with each other) with two Nodes (Application Server-1 and Application server-2). The Application running on the application server (http requests) will be accessed by ussing Proxy servers ip address. We are also configuring virtual ip to access the Application from both the application servers over virtual IP.
+
+Working::
+All the servers and nodes will be connected with each other. Outside requests will hit on Virtual ip. Virtual ip will forward those 
+request to HAproxy server. One of the HAproxy server will be acting as a master and other will be slave. Virtul ip will be attached 
+to master server, in case of master server fails Virtual ip will move to slave automatically.
+The proxy server will forward the requests to the application server using pre-defined algorithm (eg. round robin). If one of the 
+application server goes down then all the traffic will be forwarded on another appication server automatically.
+
+
+
+Steps: 
+
+1: Install haproxy and keepalived packages on both the servers (10.10.0.10 & 10.10.0.20)
+#yum install haproxy keepalive
+
+
+2: Turn off the Firewall.
+#systemctl stop firewalld.service
+#systemctl disable firewalld.service
+
+
+3: Add below lines in haproxy.conf file 
+#vim /etc/haproxy/haproxy.conf 
+
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option http-server-close
+    option forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          1m
+    timeout server          1m
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 3000
+
+frontend main *:80
+
+
+backend app
+    balance     roundrobin
+        server myclient1 10.10.0.11:80  check
+        server myclient2 10.10.0.12:80  check
+
+
+
+4: Add below lines in keepalived.conf
+#vim /etc/keepalived/keepalived.conf
+
+vrrp_script chk_haproxy
+        {
+                script "killall -0 haproxy"
+                interval 2
+                weight 2
+        }
+
+vrrp_instance VI_1
+        {
+                interface ens33
+        state SLAVE
+        virtual_router_id 51
+        priority 100
+
+        virtual_ipaddress
+                {
+                        10.10.0.30
+                }
+        track_script
+                 {
+                        chk_haproxy
+                }
+}
+
+
+
+Note::: 
+1: On one of the node make "state=MASTER" , and on another node "state=SLAVE".
+2: In virtual_ipaddress mentioned any ipaddress which you want to access virtually. eg. 10.10.0.30
+3: Make sure with the interface. Interface should be the same on which your system/service ip is configured.
+
+
+
+
+5: Start and enabled the HAproxy and keepalived service
+#systemctl start keepalived.service
+#systemctl enable keepalived.service
+
+#systemctl start haproxy.service
+#systemctl enable haproxy.service
+
+
+
+6: Run ip addr command on both Proxy servers to check the Virtual ip.
+#ip addr
+
+Note: The above command will show the virtual ip on any one of the server. Shut down the server which is showing virtual ip. And now 
+the other server should reflect the virtul ip.
+
+
+
+7: Install httpd packge on both the nodes.
+#yum install httpd
+
+
+8: Start and enable the httpd service on both the nodes.
+#systemctl start httpd.service
+#systemctl enable httpd.service
+
+
+9: Configure index.html page in /var/www/html directory on both the nodes.
+#echo "Displaying test home page from `node 1`" >> /var/www/html/index.html
+
+
+10: Turn off and disable the firewall on both the nodes.
+#systemctl stop firewalld.service
+#systemctl disable firewalld.service
+
+
+HAPrixy With Load Balancer configuration done.
+You can access the web page on your brower by using virtual ip ( web page will be also accessible using both proxy servers IP and application servers IP.)
+
+
+
+
+Nikhil Narendra Kulkarni...
