@@ -1,0 +1,53 @@
+AWS CLi installation in Linux.
+(RHEL, CentOS).
+
+AWS CLI is a tool that pulls all the AWS services together in one central console, giving you easy control of multiple AWS services with a single tool. The acronym stands for Amazon Web Services Command Line Interface because, as its name suggests, users operate it from the command line. With it, you can control services manually or automate them with powerful scripts.
+AWS is a secure cloud services platform that offers computing power, content delivery, database storage, and other infrastructure services for developers. Proponents point to its speed, flexible pricing, exemplary customer service, anda huge variety of services as benefits. The AWS CLI puts the icing on the cake by tying control of all those services together into one simple command line interface.
+
+
+
+1:	Check wether python is installed or not.
+
+#python --version
+Python 2.7.5
+
+If above output appiers means python is installed.
+ 
+If you output doesnt appiers then run the following command to install python.
+#yum install python
+
+
+2: 	Create an AWS directory.
+#mkdir /aws
+#cd /aws
+
+
+3: 	Downoad the required aws-cli packages.
+#wget https://s3.amazonaws.com/aws-cli/awscli-bundle.zip
+
+
+4: 	Unzip the package.
+#unzip awscli-bundle.zip
+
+
+5: 	install the package.
+# ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+
+
+6: 	check wether awscli installed or not.
+#aws help
+If you got the output containig aws details means aws-cli is properly installed.
+
+
+7:	Now you only need to configure AWS-cli to use it or connect it with your AWS account.
+#aws configure
+
+you will be asked to fill below mentioned detaills to configure your AWS account with AWS-CLI.
+
+# aws configure
+AWS Access Key ID [None]: XXXYYYZZZ
+AWS Secret Access Key [None]: XYZXYZXYZ(secreate key)
+Default region name [None]: us-west-2
+Default output format [None]: 
+
+Now you are ready to use AWS-CLI to create VPC, Subnets, Routes, Security Groups etc...
