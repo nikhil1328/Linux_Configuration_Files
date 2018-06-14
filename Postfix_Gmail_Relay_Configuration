@@ -1,0 +1,81 @@
+Postfix Gamil Relay configuration.
+
+Postfix: Postfix is a free and open-source mail transfer agent (MTA) that routes and delivers electronic mail.
+Postfix is a flexible mail server that is available on most Linux distribution. Though a full feature mail server, Postfix can also be used as a simple relay host to another mail server, or smart host.
+You can configure your MTA to relay outgoing mail through Gmail. This gives you the benefit of Gmail's reliability and robust infrastructure, and provides you with a simple means of sending email from the command line.
+
+
+Installation and configuration steps.
+
+
+1: Install postfix package.
+#yum install postfix cyrus-sasl-plain mailx
+
+
+
+2: Restart and enable the postfix service.
+#systemctl restart postfix
+#systemctl enable postfix
+
+
+
+3: Configure postfix. Add below mentioned lines.
+#vim /etc/postfix/main.cf
+
+
+myhostname = abc.xyz.com
+relayhost = [smtp.gmail.com]:587
+smtp_use_tls = yes
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+smtp_tls_CAfile = /etc/ssl/certs/ca-bundle.crt
+smtp_sasl_security_options = noanonymous
+smtp_sasl_tls_security_options = noanonymous
+
+
+Note: The myhostname parameter is optional. If the hostname is not specified, Postfix will use the fully-qualified domain name of the Linux server.
+
+
+
+4: Provide gmail credentials . "/etc/postfix/sasl_passwd"
+
+#vim /etc/postfix/sasl_passwd
+[smtp.gmail.com]:587 username:password
+
+Note: Replace username and password with your gmail account username and password.
+
+
+
+5: Process Password File.
+Use postmap to compile and hash the contents of sasl_passwd. The results will be stored in your Postfix configuration directory in the file sasl_passwd.db.
+
+#postmap /etc/postfix/sasl_passwd
+#chown root:postfix /etc/postfix/sasl_passwd*
+#chmod 640 /etc/postfix/sasl_passwd*
+
+
+
+6: Reload the Postfix configuration. 
+#systemctl restart postfix
+
+
+
+
+7: Test the Relay.
+#mail -s "Subjet of the mail"  abc@zyz.com
+
+
+
+8: Troubleshooting
+The maillog can be reviewed if the test message is not successfully delivered.
+
+#tail -f /var/log/maillog
+
+
+
+
+
+
+
+
+⁬Nikhil Narendra Kulkarni
