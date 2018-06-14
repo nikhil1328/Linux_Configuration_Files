@@ -1,0 +1,78 @@
+Rsyslog server installation and configuration..
+
+In Linux, the log files are files that contain messages about the system functions which are used by system administrators to identify eventual issues on the machines. The logs help administrators to visualize the events that happened in the system over time periods. Usually, all log files are kept under /var/log directory in Linux. The main purpose of log files is to troubleshoot system problems.
+The rsyslog server can be configured to run a central log manager, in a service-client model fashion, and send log messages over the network via TCP or UDP transport protocols or receive logs from network devices, servers, routers, switches or other systems or embedded devices that generate logs.
+Server side..
+
+
+1: Install the rsyslog package on the server.
+#yum insdtall rsyslog
+
+
+
+2: Edit the /etc/rsyslog.conf file.
+Uncomment the tow entries followed by #Provide TCP syslog reception.
+Add below given lines.
+$template TmplAuth, "/var/log/%HOSTNAME%/%PROGRAMNAME%.log"
+*.* ?TmplAuth
+
+#vim /etc/rsyslog.conf
+
+# Provides TCP syslog reception
+$ModLoad imtcp
+$InputTCPServerRun 514
+$template TmplAuth, "/var/log/hosts/%HOSTNAME%/%PROGRAMNAME%.log"
+*.* ?TmplAuth
+*.info,mail.none,authpriv.none,cron.none   ?TmplMsg
+
+
+
+3: Restart the rsyslog service and enable it.
+#systemctl start rsyslog.service
+#systemctl enable rsyslog.service
+
+
+
+Client Side...
+
+1: Install the rsyslog package on the server.
+#yum insdtall rsyslog
+
+
+
+2: Edit the rsyslog.conf file
+Add the below mention line in the file
+*.* @@(server ip):514
+
+#vim /etc/rsyslog.conf
+#*.* @@remote-host:514
+# ### end of the forwarding rule ###
+
+*.* @@xxx.xxx.xxx.xxx:514
+
+Note: Replace xxx.xxx.xxx.xxx with your server's ip adress.
+
+
+
+3: Restart the rsyslog service and enable it.
+#systemctl start rsyslog.service
+#systemctl enable rsyslog.service
+
+
+
+We are done with the rsyslog configuration, Let's test it.
+
+
+Run below command on client:
+#logger test_log_from_client 
+
+
+And now test on the server.
+#cd /var/log/hosts
+
+You will find the logs of the server/host from which you had ran the "logger test_log_from_client".
+
+
+
+
+Nikhil Narendra Kulkarni
