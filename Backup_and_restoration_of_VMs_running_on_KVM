@@ -1,0 +1,70 @@
+Backup and Restoration of Guest VM running on KVM.
+
+KVM :: A kernel-based virtual machine (KVM) is a virtualization infrastructure built for Linux OS and designed to operate on x86-based processor architecture.
+KVM is developed by Red Hat Corporation to provide a virtualization solution and services on the Linux operating system platform. KVM is designed over the primary Linux OS kernel.
+
+KVM is a type of hypervisor that enables, emulates and provides for the creation of virtual machines on operating systems. These machines are built on top of the Linux kernel, using operating systems such as Linux, Ubuntu and Fedora. KVM can be installed on all x86 processors and provide separate instruction set extensions for Intel and AMD processors. 
+KVM supports multiple different guest operating system images including Linux Kernel, Windows, BSD and Solaris. It also allocates separate virtualized computing resources for each virtual machine such as the processor, storage, memory, etc.
+
+
+
+Steps to take the backup and restoration of the Guest VM running on KVM.
+
+
+1. Check the list of VMs on the System with their state 
+#virsh --connect qemu:///system list --all
+Output:
+ Id    Name                           State
+----------------------------------------------------
+ 2     App_Server_1                           running
+ 3     App_Server_2                           running
+
+
+
+2. Shutdown the running VM whose backup is to be taken.
+Log into the VM machine and shutdown. (preferred)
+OR
+
+Run following command
+#virsh shutdown <VM Name>
+Eg:
+#virsh shutdown App_Server_1
+
+
+
+3. Clone the VM
+#virt-clone --connect=qemu:///system --original <Oroginal VM Name > --name < Cloned VM Named> --file <path to cloned VM >/<clonedVM name>.qcow2
+
+Eg:
+#virt-clone --connect=qemu:///system --original App_Server_1 --name Cloned_AppServer_1 --file /data/vm_backup/Cloned_AppServer_1.qcow2
+
+
+
+
+4. Verify the cloned VM
+#virsh --connect qemu:///system list –all
+
+
+
+
+5. Undefined the cloned VM entry from virt manager
+This command does not delete the actual cloned qcow2 disk from the path. Only the entry from virt manager is undefine.
+
+#virsh undefine <cloned VM name>
+
+Eg:
+#virsh undefine Cloned_AppServer_1
+
+
+
+Restoration of Guest VM on KVM (Same or Different Linux Machine) from qcow2 backup
+
+1. Copy the backup of VM qcow2 format on the machine where it need to be restored.
+
+
+2. Log into the system and start virt manager
+#virt-manager
+
+
+2. Follow steps on Virtual Macahine Manager windows
+File-> New Virtual Machine->Import Existing Disk Image-> Forward-> Browse the existing storage path of backup(qcow2 file) -> select OS type and version -> Forward -> <proceed next as per need>
