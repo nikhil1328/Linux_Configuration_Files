@@ -1,0 +1,511 @@
+iSCSI Target server and Initiator Configuration
+
+ISCSI::		
+iSCSI stands for  Internet Small Computer Systems Interface, an IP-based storage, works on top of internet protocol by carrying SCSI 
+commands over IP network. iSCSI transports block-level data between an iSCSI initiator on a client machine and an iSCSI target on a 
+
+
+
+storage device (server).
+
+Environment:
+Server: myserver.example.com
+IP Address: 10.10.10.10
+
+
+Client: myclient.example.com
+IP Address: 10.10.10.11
+
+
+
+iSCSI Target  :
+A server in an iSCSI storage network is called the iSCSI Target Node (or simply, 'iSCSI Target'). Such an iSCSI Target can provide 
+one or more so-called logical units (LUNs).
+
+
+
+iSCSI Initiator :
+A client in an iSCSI storage network is called the iSCSI Initiator Node (or simply, 'iSCSI Initiator'). This iSCSI Initiator can 
+connect to a server (the iSCSI Target). In doing so, the iSCSI Initiator sends SCSI commands to the iSCSI Target. These SCSI commands 
+are packaged in IP packets.
+
+
+
+
+Storage Configuration:
+Here, we will create 5GB of LVM disk on the target server to use as a shared storage for clients. Let’s list the available disks 
+attached to the target server using below command.
+
+
+[root@myserver ~]# fdisk -l | grep -i sd
+ Disk /dev/sda: 107.4 GB, 107374182400 bytes, 209715200 sectors
+ /dev/sda1   *        2048     1026047      512000   83  Linux
+ /dev/sda2         1026048   209715199   104344576   8e  Linux LVM
+ Disk /dev/sdb: 10.7 GB, 10737418240 bytes, 20971520 sectors
+
+
+From the above output, you can see that my system has a 10GB of disk (/dev/sdb). We will create a 5GB partition on the above disk and 
+will use it for LVM.
+
+
+
+[root@myserver ~]# fdisk /dev/sdb
+ Welcome to fdisk (util-linux 2.23.2).
+ Changes will remain in memory only, until you decide to write them.
+ Be careful before using the write command.
+ Device does not contain a recognized partition table
+ Building a new DOS disklabel with disk identifier 0x173dfa4d.
+ Command (m for help): n  --> New partition
+ Partition type:
+   p   primary (0 primary, 0 extended, 4 free)
+   e   extended
+ Select (default p): p --> Pimary partition
+ Partition number (1-4, default 1): 1 - -> Partition number
+ First sector (2048-20971519, default 2048): --> Just enter
+ Using default value 2048
+ Last sector, +sectors or +size{K,M,G} (2048-20971519, default 20971519): +5G  --> Enter the size
+ Partition 1 of type Linux and of size 5 GiB is set
+ Command (m for help): t  --> Change label
+ Selected partition 1
+ Hex code (type L to list all codes): 8e --> Change it as LVM label
+ Changed type of partition 'Linux' to 'Linux LVM'
+ Command (m for help): w --> Save
+ The partition table has been altered!
+ Calling ioctl() to re-read partition table.
+ Syncing disks.
+
+
+
+Create a LVM with /dev/sdb1 partition (replace /dev/sdb1 with your disk name)
+[root@myserver ~]# pvcreate /dev/sdb1
+[root@myserver ~]# vgcreate vg_iscsi /dev/sdb1
+[root@myserver ~]# lvcreate -l 100%FREE -n lv_iscsi vg_iscsi
+
+
+
+Creating iSCSI target:
+Now you have an option of creating target either with authentication or without authentication.
+
+
+
+Configuring iSCSI Targets with CHAP authentication:
+
+1: Install the targetcli package on the server.
+[root@myserver ~]# yum install targetcli -y
+
+
+
+
+2: Once you installed the package, enter below command to get a iSCSI CLI for an interactive prompt.
+[root@myserver ~]# targetcli
+Warning: Could not load preferences file /root/.targetcli/prefs.bin.
+targetcli shell version 2.1.fb41
+Copyright 2011-2013 by Datera, Inc and others.
+For help on commands, type 'help'.
+>
+
+
+
+3: Now use an existing logical volume (/dev/vg_iscsi/lv_iscsi) as a block-type backing store for storage object “scsi_disk1_server“.
+/> cd backstores/block
+/backstores/block> create scsi_disk1_server /dev/vg_iscsi/lv_iscsi
+Created block storage object scsi_disk1_server using /dev/vg_iscsi/lv_iscsi.
+
+
+
+
+4: Create a target.
+/backstores/block> cd /iscsi
+/iscsi> create iqn.2016-02.local.example.myserver:disk1
+Created target iqn.2016-02.local.example.myserver:disk1.
+Created TPG 1.
+Global pref auto_add_default_portal=true
+Created default portal listening on all IPs (0.0.0.0), port 3260.
+/iscsi>
+
+
+
+
+5: Create ACL for client machine (It’s the IQN which clients use to connect).
+/iscsi> cd /iscsi/iqn.2016-02.local.example.myserver:disk1/tpg1/acls
+/iscsi/iqn.20...sk1/tpg1/acls> create iqn.2016-02.local.example.myserver:node1node2
+Created Node ACL for iqn.2016-02.local.example.myserver:node1node2
+Set CHAP authentication.
+/iscsi/iqn.20...sk1/tpg1/acls> cd iqn.2016-02.local.example.myserver:node1node2
+/iscsi/iqn.20...er:node1node2> set auth userid=user
+Parameter userid is now 'user'.
+/iscsi/iqn.20...er:node1node2>  set auth password=password
+Parameter password is now 'password'.
+
+
+
+
+6: Create a LUN under the target, The LUN should use the previously mentioned backing storage object named “scsi_disk1_server”
+/iscsi/iqn.20...er:node1node2> cd /iscsi/iqn.2016-02.local.example.myserver:disk1/tpg1/luns
+/iscsi/iqn.20...sk1/tpg1/luns> create /backstores/block/scsi_disk1_server
+Created LUN 0.
+Created LUN 0->0 mapping in node ACL iqn.2016-02.local.example.myserver:node1node2
+
+
+
+
+7: Verify the target server configuration.
+/iscsi/iqn.20.../tpg1/portals> cd /
+/> ls
+o- / ......................................................................................................................... [...]
+  o- backstores .............................................................................................................. [...]
+  | o- block .................................................................................................. [Storage Objects: 1]
+  | | o- scsi_disk1_server .................................................. [/dev/vg_iscsi/lv_iscsi (5.0GiB) write-thru activated]
+  | o- fileio ................................................................................................. [Storage Objects: 0]
+  | o- pscsi .................................................................................................. [Storage Objects: 0]
+  | o- ramdisk ................................................................................................ [Storage Objects: 0]
+  o- iscsi ............................................................................................................ [Targets: 1]
+  | o- iqn.2016-02.local.example.myserver:disk1 ............................................................................ [TPGs: 
+
+1]
+  |   o- tpg1 ............................................................................................... [no-gen-acls, no-auth]
+  |     o- acls .......................................................................................................... [ACLs: 1]
+  |     | o- iqn.2016-02.local.example.myserver:node1node2 .......................................................... [Mapped LUNs: 
+
+1]
+  |     |   o- mapped_lun0 ..................................................................... [lun0 block/scsi_disk1_server (rw)]
+  |     o- luns .......................................................................................................... [LUNs: 1]
+  |     | o- lun0 ............................................................... [block/scsi_disk1_server (/dev/vg_iscsi/lv_iscsi)]
+  |     o- portals .................................................................................................... [Portals: 1]
+  |       o- 0.0.0.0:3260 ..................................................................................................... [OK]
+  o- loopback ......................................................................................................... [Targets: 0]
+
+
+
+
+
+8: Save and exit from target CLI.
+/> saveconfig
+Last 10 configs saved in /etc/target/backup.
+Configuration saved to /etc/target/saveconfig.json
+/> exit
+Global pref auto_save_on_exit=true
+Last 10 configs saved in /etc/target/backup.
+Configuration saved to /etc/target/saveconfig.json
+
+
+
+
+
+9: Enable and restart the target service.
+[root@server ~]# systemctl enable target.service
+[root@server ~]# systemctl restart target.service
+
+
+
+
+
+10: Configure the firewall to allow iSCSI traffic.
+[root@server ~]# firewall-cmd --permanent --add-port=3260/tcp
+[root@server ~]# firewall-cmd --reload
+
+
+
+*********************************************************************************************
+
+
+
+Configure Initiator with CHAP authentication:
+Now it’s the time to configure a client machine to use this target as a storage.
+
+
+1: Install below package on the client machine
+(myclient).
+[root@myclient ~]# yum install iscsi-initiator-utils -y
+
+
+
+
+2: Edit below file and add iscsi initiator name.
+[root@myclient ~]# vi /etc/iscsi/initiatorname.iscsi
+InitiatorName=iqn.2016-02.local.example.myserver:node1node2
+
+
+
+
+3: Discover the target using below command.
+[root@myclient ~]# iscsiadm -m discovery -t st -p 10.10.10.10
+ 10.10.10.10:3260,1 iqn.2016-02.local.example.myserver:disk1
+
+
+
+
+4: Enable CHAP authentication in iscsid.conf file, uncomment and modify the green colored lines as per your environment.
+[root@myclient ~]# vi /etc/iscsi/iscsid.conf
+# To enable CHAP authentication set node.session.auth.authmethod
+# to CHAP. The default is None.
+node.session.auth.authmethod = CHAP
+
+
+# To set a CHAP username and password for initiator
+# authentication by the target(s), uncomment the following lines:
+node.session.auth.username = user
+node.session.auth.password = password
+
+
+
+
+5: Restart and enable the initiator service.
+[root@myclient ~]# systemctl restart iscsid.service
+[root@myclient ~]# systemctl enable iscsid.service
+
+ 
+
+
+6: Login to the discovered target.
+[root@myclient ~]# iscsiadm -m node -T iqn.2016-02.local.example.myserver:disk1 -p 10.10.10.10 -l
+Logging in to [iface: default, target: iqn.2016-02.local.example.myserver:disk1, portal: 10.10.10.10,3260] (multiple)
+Login to [iface: default, target: iqn.2016-02.local.example.myserver:disk1, portal: 10.10.10.10,3260] successful.
+
+
+
+
+*********************************************************************************************
+
+
+
+Configuring iSCSI Targets without CHAP Authentication:
+
+1: Install the targetcli package on the server.
+[root@server ~]# yum install targetcli -y
+
+
+
+
+2: Once you installed the package, enter below command to get a iSCSI CLI for an interactive prompt.
+[root@server ~]# targetcli
+Warning: Could not load preferences file /root/.targetcli/prefs.bin.
+targetcli shell version 2.1.fb41
+Copyright 2011-2013 by Datera, Inc and others.
+For help on commands, type 'help'.
+>
+
+
+
+
+3: Now use an existing logical volume (/dev/vg_iscsi/lv_iscsi) as a block-type backing store for storage object “scsi_disk1_server“.
+/> cd backstores/block
+/backstores/block> create scsi_disk1_server /dev/vg_iscsi/lv_iscsi
+Created block storage object scsi_disk1_server using /dev/vg_iscsi/lv_iscsi.
+
+
+
+
+4: Create a target.
+/backstores/block> cd /iscsi
+/iscsi> create iqn.2016-02.local.example.myserver:disk1
+Created target iqn.2016-02.local.example.myserver:disk1.
+Created TPG 1.
+Global pref auto_add_default_portal=true
+Created default portal listening on all IPs (0.0.0.0), port 3260.
+/iscsi>
+Create ACL for client machine (It’s the IQN which clients use to connect).
+/iscsi> cd /iscsi/iqn.2016-02.local.example.myserver:disk1/tpg1/acls
+/iscsi/iqn.20...sk1/tpg1/acls> create iqn.2016-02.local.example.myserver:node1node2
+Created Node ACL for iqn.2016-02.local.example.myserver:node1node2
+
+
+By default authentication is enabled, disable it.
+/iscsi/iqn.20...sk1/tpg1/acls> cd /iscsi/iqn.2016-02.local.example.myserver:disk1/tpg1/
+/iscsi/iqn.20...er:disk1/tpg1> set attribute authentication=0
+Parameter authentication is now '0'.
+/iscsi/iqn.20...er:disk1/tpg1> set attribute generate_node_acls=1
+Parameter generate_node_acls is now '1'.
+
+
+Create a LUN under the target, The LUN should use the previously mentioned backing storage object named “scsi_disk1_server”
+/iscsi/iqn.20...er:disk1/tpg1> cd /iscsi/iqn.2016-02.local.example.myserver:disk1/tpg1/luns
+/iscsi/iqn.20...sk1/tpg1/luns> create /backstores/block/scsi_disk1_server 
+Created LUN 0.
+Created LUN 0->0 mapping in node ACL iqn.2016-02.local.example.myserver:node1node2
+
+
+Verify the target server configuration.
+/iscsi/iqn.20.../tpg1/portals> cd /
+/> ls
+o- / ......................................................................................................................... [...]
+  o- backstores .............................................................................................................. [...]
+  | o- block .................................................................................................. [Storage Objects: 1]
+  | | o- scsi_disk1_server .................................................. [/dev/vg_iscsi/lv_iscsi (5.0GiB) write-thru activated]
+  | o- fileio ................................................................................................. [Storage Objects: 0]
+  | o- pscsi .................................................................................................. [Storage Objects: 0]
+  | o- ramdisk ................................................................................................ [Storage Objects: 0]
+  o- iscsi ............................................................................................................ [Targets: 1]
+  | o- iqn.2016-02.local.example.myserver:disk1 ............................................................................ [TPGs: 
+
+1]
+  |   o- tpg1 .................................................................................................. [gen-acls, no-auth]
+  |     o- acls .......................................................................................................... [ACLs: 1]
+  |     | o- iqn.2016-02.local.example.myserver:node1node2 .......................................................... [Mapped LUNs: 
+
+1]
+  |     |   o- mapped_lun0 ..................................................................... [lun0 block/scsi_disk1_server (rw)]
+  |     o- luns .......................................................................................................... [LUNs: 1]
+  |     | o- lun0 ............................................................... [block/scsi_disk1_server (/dev/vg_iscsi/lv_iscsi)]
+  |     o- portals .................................................................................................... [Portals: 1]
+  |       o- 0.0.0.0:3260 ..................................................................................................... [OK]
+  o- loopback ......................................................................................................... [Targets: 0]
+
+
+
+
+
+5: Save and exit from target CLI.
+/> saveconfig
+Last 10 configs saved in /etc/target/backup.
+Configuration saved to /etc/target/saveconfig.json
+/> exit
+Global pref auto_save_on_exit=true
+Last 10 configs saved in /etc/target/backup.
+Configuration saved to /etc/target/saveconfig.json
+
+
+
+
+
+6: Enable and restart the target service.
+[root@server ~]# systemctl enable target.service
+[root@server ~]# systemctl restart target.service
+
+
+
+
+
+7: Configure the firewall to allow iSCSI traffic.
+[root@server ~]# firewall-cmd --permanent --add-port=3260/tcp
+[root@server ~]# firewall-cmd --reload
+
+
+
+
+
+8: Now it’s the time to configure a client machine to use this target as a storage, install below package on the client machine 
+
+(myclient).
+[root@myclient ~]# yum install iscsi-initiator-utils -y
+
+
+
+
+
+9: Edit below file and add iscsi initiator name.
+[root@myclient ~]# vi /etc/iscsi/initiatorname.iscsi
+InitiatorName=iqn.2016-02.local.example.myserver:node1node2
+
+
+
+
+
+10: Discover the target using below command.
+[root@myclient ~]# iscsiadm -m discovery -t st -p 10.10.10.10
+ 10.10.10.10:3260,1 iqn.2016-02.local.example.myserver:disk1
+
+
+
+
+11: Restart and enable the initiator service.
+[root@myclient ~]# systemctl restart iscsid.service
+[root@myclient ~]# systemctl enable iscsid.service
+
+
+
+
+
+12: Login to the discovered target.
+[root@myclient ~]# iscsiadm -m node -T iqn.2016-02.local.example.myserver:disk1 -p 10.10.10.10 -l
+Logging in to [iface: default, target: iqn.2016-02.local.example.myserver:disk1, portal: 10.10.10.10,3260] (multiple)
+Login to [iface: default, target: iqn.2016-02.local.example.myserver:disk1, portal: 10.10.10.10,3260] successful.
+
+
+
+
+
+13: Creating File System:
+
+List down the attached disks.
+ [root@myclient ~]# cat /proc/partitions
+major minor  #blocks  name
+
+   8        0  104857600 sda
+   8        1     512000 sda1
+   8        2  104344576 sda2
+  11        0    1048575 sr0
+ 253        0    2113536 dm-0
+ 253        1   52428800 dm-1
+ 253        2   49799168 dm-2
+   8       16    5238784 sdb
+
+
+
+
+
+14: Format the new disk (for sake of article, I have formated whole disk instead of creating partition)
+root@myclient ~]# mkfs.xfs /dev/sdb
+meta-data=/dev/sdb               isize=256    agcount=8, agsize=163712 blks
+         =                       sectsz=512   attr=2, projid32bit=1
+         =                       crc=0
+data     =                       bsize=4096   blocks=1309696, imaxpct=25
+         =                       sunit=0      swidth=0 blks
+naming   =version 2              bsize=4096   ascii-ci=0 ftype=0
+log      =internal log           bsize=4096   blocks=2560, version=2
+         =                       sectsz=512   sunit=0 blks, lazy-count=1
+realtime =none                   extsz=4096   blocks=0, rtextents=0
+
+
+
+
+
+15: Mount the disk.
+[root@myclient ~]# mount /dev/sdb /mnt
+
+verify the disk is mounted using below command.
+[root@myclient ~]# df -hT
+Filesystem              Type      Size  Used Avail Use% Mounted on
+/dev/mapper/centos-root xfs        50G  955M   50G   2% /
+devtmpfs                devtmpfs  908M     0  908M   0% /dev
+tmpfs                   tmpfs     914M   54M  861M   6% /dev/shm
+tmpfs                   tmpfs     914M  8.5M  905M   1% /run
+tmpfs                   tmpfs     914M     0  914M   0% /sys/fs/cgroup
+/dev/mapper/centos-home xfs        48G   33M   48G   1% /home
+/dev/sda1               xfs       497M   97M  401M  20% /boot
+/dev/sdb                xfs       5.0G   33M  5.0G   1% /mnt
+
+
+If  you want to make it auto mount you can add an entry in /etc/fstab file.
+First get the bklid of the /dev/sdb
+root@myclient ~]# blkid /dev/sdb
+/dev/sdd: UUID="35968eb6-b024-485b-a859-71475285c39b" TYPE= "ext4"
+
+
+Add this UUID in /etc/fstab file with mention mount point.
+root@myclient ~]# vim /etc/fstab
+ UUID="35968eb6-b024-485b-a859-71475285c39b"   /mnt		xfs	defaults             0	0
+
+
+
+
+
+16: In case you want to de-attach the added disk, please follow the procedure (unmount and logout).
+[root@myclient ~]# umount /mnt/
+[root@myclient ~]# iscsiadm -m node -T iqn.2016-02.local.example.myserver:disk1 -p 10.10.10.10 -u
+Logging out of session [sid: 1, target: iqn.2016-02.local.example.myserver:disk1, portal: 10.10.10.10,3260]
+Logout of [sid: 1, target: iqn.2016-02.local.example.myserver:disk1, portal: 10.10.10.10,3260] successful.
+
+
+
+Note 1:
+If you need to shut down target and initiator, shut down the initiator first. If you shut down the target first, the initiator won’t 
+
+be able to unmount the remote resource and will be stuck in the shutdown process.
+
+
+Note 2:: 
+If things go wrong, we can stop the iscsi.service and remove all files under /var/lib/iscsi/nodes to clean up all current 
+
+configuration. After doing that, we need to restart the iscsi.service and start the discovery and login again.
+
